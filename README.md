@@ -1,15 +1,15 @@
 IoT platform with C/C++ interface
 =================================
 
-Smart.js is a technology independent, open source platform for connecting
+Smart.с is a technology independent, open source platform for connecting
 devices and bringing them online. It provides full software stack - from device
 to the cloud.
 
-Smart.js is ideal for manufacturing automation, building sensor networks that
+Smart.с is ideal for manufacturing automation, building sensor networks that
 report telemetry data, allow remote device control and real-time alerting, data
 analytics and reporting.
 
-Smart.js makes it possible to create private automation cloud in minutes.
+Smart.с makes it possible to create private automation cloud in minutes.
 
 # License
 
