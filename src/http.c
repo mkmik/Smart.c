@@ -37,7 +37,7 @@ static int get_request_len(const char *s, int buf_len) {
   return 0;
 }
 
-int parse_http_request(const char *s, int n, struct parsed_http_request *req) {
+int parse_http_request(const char *s, int n, struct http_request *req) {
   const char *end;
   int len, num_headers = 0;
 
@@ -69,6 +69,38 @@ int parse_http_request(const char *s, int n, struct parsed_http_request *req) {
     }
     num_headers++;
   }
+  req->num_headers = num_headers;
+  req->request_len = len;
 
   return len;
+}
+
+static void http_cb(struct ns_connection *nc, enum ns_event ev, void *p) {
+  struct iobuf *io = &nc->recv_iobuf;
+  struct http_request hr;
+  int req_len;
+
+  (void) p;
+
+  switch (ev) {
+    case NS_RECV:
+      req_len = parse_http_request(io->buf, io->len, &hr);
+      if (req_len < 0) {
+        nc->flags |= NSF_CLOSE_IMMEDIATELY;
+      } else if (req_len > 0 && nc->listener && nc->listener->proto_data) {
+        ((ns_callback_t) nc->listener->proto_data)(nc, NS_HTTP_REQUEST, &hr);
+      }
+      break;
+    default: break;
+  }
+}
+
+struct ns_connection *ns_bind_http(struct ns_mgr *mgr, const char *addr,
+                                   void *user_data, ns_callback_t cb) {
+  struct ns_connection *nc = ns_bind(mgr, addr, user_data);
+  if (nc != NULL) {
+    nc->callback = http_cb;
+    nc->proto_data = (void *) cb;
+  }
+  return nc;
 }

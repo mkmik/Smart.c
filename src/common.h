@@ -6,9 +6,10 @@
 
 #include "net_skeleton.h"
 
+// Describes some memory chunk
 struct vec {
-  const char *p;
-  size_t len;
+  const char *p;    // Points to the memory chunk
+  size_t len;       // Size of memory chunk
 };
 
 #endif  // NS_COMMON_HEADER_DEFINED

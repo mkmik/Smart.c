@@ -6,7 +6,9 @@
 
 #include "common.h"
 
-struct parsed_http_request {
+struct http_request {
+  int num_headers;
+  int request_len;
   struct vec method;
   struct vec uri;
   struct vec proto;
@@ -14,10 +16,10 @@ struct parsed_http_request {
   struct vec values[40];
 };
 
-int parse_http_request(const char *, int, struct parsed_http_request *);
+int parse_http_request(const char *, int, struct http_request *);
+struct ns_connection *ns_bind_http(struct ns_mgr *, const char *addr, void *p,
+                                   ns_callback_t cb);
 
-enum {
-  NS_HTTP_REQUEST
-};
+#define NS_HTTP_REQUEST ((enum ns_event) (NS_CLOSE + 100))
 
 #endif  // NS_HTTP_HEADER_DEFINED
