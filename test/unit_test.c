@@ -1,4 +1,5 @@
 #include "../src/http.c"
+#include "../src/websocket.c"
 
 #define FAIL(str, line) do {                    \
   printf("Fail on line %d: [%s]\n", line, str); \
@@ -20,6 +21,8 @@ static const char *test_parse_http_message(void) {
   static const char *a = "GET / HTTP/1.0\n\n";
   static const char *b = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
   static const char *c = "a b c\nz:  k \nb: t\nvvv\n\n xx";
+  static const char *d = "a b c\nContent-Length: 21 \nb: t\nvvv\n\n";
+  struct vec *v;
   struct http_request req;
 
   ASSERT(parse_http_request("\b23", 3, &req) == -1);
@@ -27,43 +30,43 @@ static const char *test_parse_http_message(void) {
   ASSERT(parse_http_request(a, strlen(a) - 1, &req) == 0);
   ASSERT(parse_http_request(a, strlen(a), &req) == (int) strlen(a));
   ASSERT(parse_http_request(b, strlen(b), &req) == (int) strlen(b));
-  ASSERT(req.names[0].len == 3);
-  ASSERT(req.values[0].len == 3);
-  ASSERT(req.names[1].p == NULL);
+  ASSERT(req.header_names[0].len == 3);
+  ASSERT(req.header_values[0].len == 3);
+  ASSERT(req.header_names[1].p == NULL);
   ASSERT(parse_http_request(c, strlen(c), &req) == (int) strlen(c) - 3);
-  ASSERT(req.names[2].p == NULL);
-  ASSERT(req.names[0].p != NULL);
-  ASSERT(req.names[1].p != NULL);
-  ASSERT(memcmp(req.values[1].p, "t", 1) == 0);
-  ASSERT(req.names[1].len == 1);
+  ASSERT(req.header_names[2].p == NULL);
+  ASSERT(req.header_names[0].p != NULL);
+  ASSERT(req.header_names[1].p != NULL);
+  ASSERT(memcmp(req.header_values[1].p, "t", 1) == 0);
+  ASSERT(req.header_names[1].len == 1);
+  ASSERT(parse_http_request(d, strlen(d), &req) == (int) strlen(d));
+  ASSERT(req.body.len == 21);
+  ASSERT(req.message.len == 21 + strlen(d));
+  ASSERT(get_http_header(&req, "foo") == NULL);
+  ASSERT((v = get_http_header(&req, "contENT-Length")) != NULL);
+  ASSERT(v->len == 2 && memcmp(v->p, "21", 2) == 0);
 
   return NULL;
 }
 
-static void cb1(struct ns_connection *nc, enum ns_event ev, void *p) {
-  struct http_request *req = (struct http_request *) p;
-
-  switch (ev) {
-    case NS_HTTP_REQUEST:
-      ns_printf(nc, "HTTP/1.0 200 OK\n\n[%.*s]", (int) req->uri.len, req->uri.p);
-      nc->flags |= NSF_FINISHED_SENDING_DATA;
-      break;
-    default:
-      break;
-  }
+static void cb1(struct ns_connection *nc, const struct http_request *req) {
+  ns_printf(nc, "HTTP/1.0 200 OK\n\n[%.*s]", (int) req->uri.len, req->uri.p);
+  nc->flags |= NSF_FINISHED_SENDING_DATA;
 }
 
 static const char *test_bind_http(void) {
   static const char *addr = "127.0.0.1:7777";
   struct ns_mgr mgr;
   struct ns_connection *nc, *nc2;
+  char buf[10] = "";
 
   ns_mgr_init(&mgr, NULL, NULL);
   ASSERT(ns_bind_http(&mgr, addr, NULL, cb1) != NULL);
 
   // Valid HTTP request
-  ASSERT((nc = ns_connect(&mgr, addr, NULL)) != NULL);
-  ns_printf(nc, "%s", "GET /foo HTTP/1.0\n\n");
+  ASSERT((nc = ns_connect(&mgr, addr, buf)) != NULL);
+  ns_printf(nc, "%s", "POST /foo HTTP/1.0\nContent-Length: 10\n\n"
+            "0123456789");
 
   // Invalid HTTP request
   ASSERT((nc2 = ns_connect(&mgr, addr, NULL)) != NULL);
