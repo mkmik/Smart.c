@@ -6,10 +6,7 @@
 
 #include "net_skeleton.h"
 
-// Describes some memory chunk
-struct vec {
-  const char *p;    // Points to the memory chunk
-  size_t len;       // Size of memory chunk
-};
+const char *ns_skip(const char *, const char *, const char *, struct ns_str *);
+int ns_ncasecmp(const char *s1, const char *s2, size_t len);
 
 #endif  // NS_COMMON_HEADER_DEFINED

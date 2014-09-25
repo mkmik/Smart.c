@@ -1,3 +1,4 @@
+#include "../src/util.c"
 #include "../src/http.c"
 #include "../src/websocket.c"
 
@@ -22,7 +23,7 @@ static const char *test_parse_http_message(void) {
   static const char *b = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
   static const char *c = "a b c\nz:  k \nb: t\nvvv\n\n xx";
   static const char *d = "a b c\nContent-Length: 21 \nb: t\nvvv\n\n";
-  struct vec *v;
+  struct ns_str *v;
   struct http_request req;
 
   ASSERT(parse_http_request("\b23", 3, &req) == -1);
@@ -49,9 +50,21 @@ static const char *test_parse_http_message(void) {
   return NULL;
 }
 
-static void cb1(struct ns_connection *nc, const struct http_request *req) {
-  ns_printf(nc, "HTTP/1.0 200 OK\n\n[%.*s]", (int) req->uri.len, req->uri.p);
-  nc->flags |= NSF_FINISHED_SENDING_DATA;
+static void cb1(struct ns_connection *nc, int ev, void *ev_data) {
+  struct http_request *req;
+
+  switch (ev) {
+    case NS_HTTP_REQUEST:
+      req = (struct http_request *) ev_data;
+      ns_printf(nc, "HTTP/1.0 200 OK\n\n[%.*s]", (int) req->uri.len, req->uri.p);
+      nc->flags |= NSF_FINISHED_SENDING_DATA;
+      printf("[%.*s]\n", (int) req->uri.len, req->uri.p);
+      break;
+    default:
+      break;
+  }
+
+  printf("cb1: %d\n", ev);
 }
 
 static const char *test_bind_http(void) {
@@ -60,16 +73,16 @@ static const char *test_bind_http(void) {
   struct ns_connection *nc, *nc2;
   char buf[10] = "";
 
-  ns_mgr_init(&mgr, NULL, NULL);
-  ASSERT(ns_bind_http(&mgr, addr, NULL, cb1) != NULL);
+  ns_mgr_init(&mgr, NULL);
+  ASSERT(ns_bind_http(&mgr, addr, cb1, NULL) != NULL);
 
   // Valid HTTP request
-  ASSERT((nc = ns_connect(&mgr, addr, buf)) != NULL);
+  ASSERT((nc = ns_connect(&mgr, addr, cb1, buf)) != NULL);
   ns_printf(nc, "%s", "POST /foo HTTP/1.0\nContent-Length: 10\n\n"
             "0123456789");
 
   // Invalid HTTP request
-  ASSERT((nc2 = ns_connect(&mgr, addr, NULL)) != NULL);
+  ASSERT((nc2 = ns_connect(&mgr, addr, cb1, NULL)) != NULL);
   ns_printf(nc2, "%s", "bl\x03\n\n");
 
   { int i; for (i = 0; i < 50; i++) ns_mgr_poll(&mgr, 1); }
