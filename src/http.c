@@ -25,7 +25,7 @@ static int get_request_len(const char *s, int buf_len) {
   return 0;
 }
 
-int parse_http_request(const char *s, int n, struct http_request *req) {
+static int parse_http(const char *s, int n, struct http_message *req) {
   const char *end;
   int len, i;
 
@@ -33,8 +33,9 @@ int parse_http_request(const char *s, int n, struct http_request *req) {
 
   memset(req, 0, sizeof(*req));
   req->message.p = s;
-  req->message.len = len;
   req->body.p = s + len;
+  req->message.len = req->body.len = ~0;
+  //req->body.len = ~0;
   end = s + len;
 
   // Request is fully buffered. Skip leading whitespaces.
@@ -63,29 +64,28 @@ int parse_http_request(const char *s, int n, struct http_request *req) {
 
     if (!ns_ncasecmp(k->p, "Content-Length", 14)) {
       req->body.len = strtoul(v->p, NULL, 10);
-      req->message.len += req->body.len;
+      req->message.len = len + req->body.len;
     }
   }
 
   return len;
 }
 
-struct ns_str *get_http_header(struct http_request *hr, const char *name) {
+struct ns_str *get_http_header(struct http_message *hm, const char *name) {
   size_t i, len = strlen(name);
 
-  for (i = 0; i < ARRAY_SIZE(hr->header_names); i++) {
-    struct ns_str *h = &hr->header_names[i], *v = &hr->header_values[i];
+  for (i = 0; i < ARRAY_SIZE(hm->header_names); i++) {
+    struct ns_str *h = &hm->header_names[i], *v = &hm->header_values[i];
     if (h->p != NULL && h->len == len && !ns_ncasecmp(h->p, name, len)) return v;
   }
 
   return NULL;
 }
 
-static void http_cb(struct ns_connection *nc, int ev, void *ev_data) {
+static void http_handler(struct ns_connection *nc, int ev, void *ev_data) {
   struct iobuf *io = &nc->recv_iobuf;
-  ns_callback_t cb = nc->listener && nc->listener->proto_data ?
-    (ns_callback_t) nc->listener->proto_data : NULL;
-  struct http_request hr;
+  ns_callback_t cb = (ns_callback_t) nc->proto_data;
+  struct http_message hm;
   int req_len;
 
   if (cb) cb(nc, ev, ev_data);
@@ -93,13 +93,19 @@ static void http_cb(struct ns_connection *nc, int ev, void *ev_data) {
   switch (ev) {
 
     case NS_RECV:
-      req_len = parse_http_request(io->buf, io->len, &hr);
-      if (req_len < 0) {
+      req_len = parse_http(io->buf, io->len, &hm);
+      if (req_len < 0 || io->len >= NS_MAX_HTTP_REQUEST_SIZE) {
         nc->flags |= NSF_CLOSE_IMMEDIATELY;
-      } else if (req_len > 0 && hr.message.len <= io->len &&
-                 nc->listener && nc->listener->proto_data) {
-        if (cb) cb(nc, NS_HTTP_REQUEST, &hr);
-        iobuf_remove(io, hr.message.len);
+      } else if (req_len > 0 && hm.message.len <= io->len) {
+        if (cb) cb(nc, nc->listener ? NS_HTTP_REQUEST : NS_HTTP_REPLY, &hm);
+        iobuf_remove(io, hm.message.len);
+      }
+      break;
+
+    case NS_CLOSE:
+      if (io->len > 0 && parse_http(io->buf, io->len, &hm) > 0 && cb) {
+        hm.body.len = io->buf + io->len - hm.body.p;
+        cb(nc, nc->listener ? NS_HTTP_REQUEST : NS_HTTP_REPLY, &hm);
       }
       break;
 
@@ -115,7 +121,7 @@ static void http_cb(struct ns_connection *nc, int ev, void *ev_data) {
 
 struct ns_connection *ns_bind_http(struct ns_mgr *mgr, const char *addr,
                                    ns_callback_t cb, void *user_data) {
-  struct ns_connection *nc = ns_bind(mgr, addr, http_cb, user_data);
+  struct ns_connection *nc = ns_bind(mgr, addr, http_handler, user_data);
   if (nc != NULL) {
     nc->proto_data = (void *) cb;
   }
@@ -124,7 +130,8 @@ struct ns_connection *ns_bind_http(struct ns_mgr *mgr, const char *addr,
 
 struct ns_connection *ns_connect_http(struct ns_mgr *mgr, const char *addr,
                                       ns_callback_t cb, void *user_data) {
-  struct ns_connection *nc = ns_bind(mgr, addr, http_cb, user_data);
+  struct ns_connection *nc = ns_connect(mgr, addr, http_handler, user_data);
+
   if (nc != NULL) {
     nc->proto_data = (void *) cb;
   }
