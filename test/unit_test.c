@@ -1,6 +1,6 @@
 #include "../src/util.c"
 #include "../src/http.c"
-#include "../src/websocket.c"
+#include "../src/sha1.c"
 
 #define FAIL(str, line) do {                    \
   printf("Fail on line %d: [%s]\n", line, str); \
@@ -69,7 +69,7 @@ static void cb2(struct ns_connection *nc, int ev, void *ev_data) {
   }
 }
 
-static const char *test_bind_http(void) {
+static const char *test_http(void) {
   static const char *addr = "127.0.0.1:7777";
   struct ns_mgr mgr;
   struct ns_connection *nc, *nc2;
@@ -84,7 +84,7 @@ static const char *test_bind_http(void) {
             "0123456789");
 
   // Invalid HTTP request
-  ASSERT((nc2 = ns_connect(&mgr, addr, cb2, NULL)) != NULL);
+  ASSERT((nc2 = ns_connect_http(&mgr, addr, cb2, NULL)) != NULL);
   ns_printf(nc2, "%s", "bl\x03\n\n");
 
   { int i; for (i = 0; i < 50; i++) ns_mgr_poll(&mgr, 1); }
@@ -96,9 +96,55 @@ static const char *test_bind_http(void) {
   return NULL;
 }
 
+static void cb3(struct ns_connection *nc, int ev, void *ev_data) {
+  struct websocket_message *wm = (struct websocket_message *) ev_data;
+
+  if (ev == NS_WEBSOCKET_FRAME) {
+    const char *reply = wm->size == 2 && !memcmp(wm->data, "hi", 2) ? "A": "B";
+    ns_printf_websocket(nc, WEBSOCKET_OP_TEXT, "%s", reply);
+  }
+}
+
+static void cb4(struct ns_connection *nc, int ev, void *ev_data) {
+  struct websocket_message *wm = (struct websocket_message *) ev_data;
+
+  (void) ev_data;
+
+  if (ev == NS_WEBSOCKET_FRAME) {
+    memcpy(nc->user_data, wm->data, wm->size);
+    ns_send_websocket(nc, WEBSOCKET_OP_CLOSE, NULL, 0);
+  } else if (ev == NS_WEBSOCKET_HANDSHAKE_DONE) {
+    // Send "hi" to server. server must reply "A".
+    ns_printf_websocket(nc, WEBSOCKET_OP_TEXT, "%s", "hi");
+  }
+}
+
+static const char *test_websocket(void) {
+  static const char *addr = "127.0.0.1:7777";
+  struct ns_mgr mgr;
+  struct ns_connection *nc;
+  char buf[20] = "";
+
+  ns_mgr_init(&mgr, NULL);
+  //mgr.hexdump_file = "/dev/stdout";
+  ASSERT(ns_bind_http(&mgr, addr, cb3, NULL) != NULL);
+
+  // Websocket request
+  ASSERT((nc = ns_connect_websocket(&mgr, addr, cb4, buf, "/ws", NULL)) != 0);
+
+  { int i; for (i = 0; i < 50; i++) ns_mgr_poll(&mgr, 1); }
+  ns_mgr_free(&mgr);
+
+  // Check that test buffer has been filled by the callback properly.
+  ASSERT(strcmp(buf, "A") == 0);
+
+  return NULL;
+}
+
 static const char *run_all_tests(void) {
   RUN_TEST(test_parse_http_message);
-  RUN_TEST(test_bind_http);
+  RUN_TEST(test_http);
+  RUN_TEST(test_websocket);
   return NULL;
 }
 
