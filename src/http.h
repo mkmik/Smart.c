@@ -4,7 +4,9 @@
 #ifndef NS_HTTP_HEADER_DEFINED
 #define NS_HTTP_HEADER_DEFINED
 
-#include "common.h"
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
 #define NS_MAX_HTTP_HEADERS 40
 #define NS_MAX_HTTP_REQUEST_SIZE 8192
@@ -63,6 +65,9 @@ void ns_printf_websocket(struct ns_connection *, int op, const char *, ...);
 
 // Utility functions
 struct ns_str *get_http_header(struct http_message *, const char *);
+size_t ns_send_http_file(struct ns_connection *, const char *path);
 
-
+#ifdef __cplusplus
+}
+#endif // __cplusplus
 #endif  // NS_HTTP_HEADER_DEFINED

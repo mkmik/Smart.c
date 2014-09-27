@@ -1,7 +1,8 @@
 // Copyright (c) 2014 Cesanta Software Limited
 // All rights reserved
 
-#include "common.h"
+#include "net_skeleton.h"
+#include "util.h"
 
 const char *ns_skip(const char *s, const char *end,
                     const char *delims, struct ns_str *v) {
@@ -25,6 +26,16 @@ int ns_ncasecmp(const char *s1, const char *s2, size_t len) {
     } while (diff == 0 && s1[-1] != '\0' && --len > 0);
 
   return diff;
+}
+
+int ns_vcasecmp(const struct ns_str *str2, const char *str1) {
+  size_t n1 = strlen(str1), n2 = str2->len;
+  return n1 == n2 ? ns_ncasecmp(str1, str2->p, n1) : n1 > n2 ? 1 : -1;
+}
+
+int ns_vcmp(const struct ns_str *str2, const char *str1) {
+  size_t n1 = strlen(str1), n2 = str2->len;
+  return n1 == n2 ? memcmp(str1, str2->p, n2) : n1 > n2 ? 1 : -1;
 }
 
 void ns_base64_encode(const unsigned char *src, int src_len, char *dst) {

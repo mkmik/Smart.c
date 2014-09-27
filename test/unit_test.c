@@ -1,6 +1,8 @@
-#include "../src/util.c"
-#include "../src/http.c"
-#include "../src/sha1.c"
+// Copyright (c) 2014 Cesanta Software Limited
+// All rights reserved
+
+#include "../smart.h"
+#include "../smart.c"
 
 #define FAIL(str, line) do {                    \
   printf("Fail on line %d: [%s]\n", line, str); \
@@ -21,7 +23,7 @@ static int s_num_tests = 0;
 static const char *test_parse_http_message(void) {
   static const char *a = "GET / HTTP/1.0\n\n";
   static const char *b = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
-  static const char *c = "a b c\nz:  k \nb: t\nvvv\n\n xx";
+  static const char *c = "get b c\nz:  k \nb: t\nvvv\n\n xx";
   static const char *d = "a b c\nContent-Length: 21 \nb: t\nvvv\n\n";
   struct ns_str *v;
   struct http_message req;
@@ -30,16 +32,20 @@ static const char *test_parse_http_message(void) {
   ASSERT(parse_http("get\n\n", 5, &req) == -1);
   ASSERT(parse_http(a, strlen(a) - 1, &req) == 0);
   ASSERT(parse_http(a, strlen(a), &req) == (int) strlen(a));
+
   ASSERT(parse_http(b, strlen(b), &req) == (int) strlen(b));
   ASSERT(req.header_names[0].len == 3);
   ASSERT(req.header_values[0].len == 3);
   ASSERT(req.header_names[1].p == NULL);
+
   ASSERT(parse_http(c, strlen(c), &req) == (int) strlen(c) - 3);
   ASSERT(req.header_names[2].p == NULL);
   ASSERT(req.header_names[0].p != NULL);
   ASSERT(req.header_names[1].p != NULL);
   ASSERT(memcmp(req.header_values[1].p, "t", 1) == 0);
   ASSERT(req.header_names[1].len == 1);
+  ASSERT(req.body.len == 0);
+
   ASSERT(parse_http(d, strlen(d), &req) == (int) strlen(d));
   ASSERT(req.body.len == 21);
   ASSERT(req.message.len == 21 + strlen(d));

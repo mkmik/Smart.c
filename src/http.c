@@ -1,6 +1,9 @@
 // Copyright (c) 2014 Cesanta Software Limited
 // All rights reserved
 
+#include "net_skeleton.h"
+#include "sha1.h"
+#include "util.h"
 #include "http.h"
 
 // Check whether full request is buffered. Return:
@@ -34,8 +37,7 @@ static int parse_http(const char *s, int n, struct http_message *req) {
   memset(req, 0, sizeof(*req));
   req->message.p = s;
   req->body.p = s + len;
-  req->message.len = req->body.len = ~0;
-  //req->body.len = ~0;
+  req->message.len = req->body.len = (size_t) ~0;
   end = s + len;
 
   // Request is fully buffered. Skip leading whitespaces.
@@ -63,9 +65,14 @@ static int parse_http(const char *s, int n, struct http_message *req) {
     }
 
     if (!ns_ncasecmp(k->p, "Content-Length", 14)) {
-      req->body.len = strtoul(v->p, NULL, 10);
+      req->body.len = to64(v->p);
       req->message.len = len + req->body.len;
     }
+  }
+
+  if (req->body.len == (size_t) ~0 && ns_vcasecmp(&req->method, "GET") == 0) {
+    req->body.len = 0;
+    req->message.len = len;
   }
 
   return len;
@@ -243,6 +250,7 @@ static void http_handler(struct ns_connection *nc, int ev, void *ev_data) {
         // TODO(lsm): check the validity of accept Sec-WebSocket-Accept
         iobuf_remove(io, req_len);
         nc->callback = websocket_handler;
+        nc->flags |= NSF_USER_1;
         cb(nc, NS_WEBSOCKET_HANDSHAKE_DONE, NULL);
         websocket_handler(nc, NS_RECV, ev_data);
       } else if (nc->listener != NULL &&
@@ -250,6 +258,7 @@ static void http_handler(struct ns_connection *nc, int ev, void *ev_data) {
         // This is a websocket request. Switch protocol handlers.
         iobuf_remove(io, req_len);
         nc->callback = websocket_handler;
+        nc->flags |= NSF_USER_1;
 
         // Send handshake
         cb(nc, NS_WEBSOCKET_HANDSHAKE_REQUEST, NULL);
@@ -318,4 +327,24 @@ struct ns_connection *ns_connect_websocket(struct ns_mgr *mgr, const char *addr,
               uri, key, hdrs == NULL ? "" : hdrs);
   }
   return nc;
+}
+
+size_t ns_send_http_file(struct ns_connection *nc, const char *path) {
+  char buf[BUFSIZ];
+  struct stat st;
+  size_t n, sent_bytes = 0;
+  FILE *fp;
+
+  if (stat(path, &st) == 0 && (fp = fopen(path, "rb")) != NULL) {
+    ns_printf(nc, "HTTP/1.1 200 OK\r\n"
+              "Content-Length: %lu\r\n\r\n", (unsigned long) st.st_size );
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+      ns_send(nc, buf, n);
+    }
+    fclose(fp);
+  } else {
+    ns_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+  }
+
+  return sent_bytes;
 }

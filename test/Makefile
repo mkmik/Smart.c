@@ -1,13 +1,12 @@
 PROG = unit_test
 PROF = -fprofile-arcs -ftest-coverage -g -O0
-NS = ../../net_skeleton
-SFLAGS = -I.. -I$(NS) -DNS_ENABLE_SSL $(CFLAGS_EXTRA)
+SFLAGS = -I.. -DNS_ENABLE_SSL $(CFLAGS_EXTRA)
 CFLAGS = -W -Wall -pthread $(PROF) $(SFLAGS)
 
 all: clean $(PROG)
 
 $(PROG):
-	g++ $(PROG).c $(NS)/net_skeleton.c -o $(PROG) $(CFLAGS) -lssl && ./$(PROG)
+	g++ $(PROG).c -o $(PROG) $(CFLAGS) -lssl && ./$(PROG)
 	gcov -b $(PROG).c
 
 $(PROG).exe:
