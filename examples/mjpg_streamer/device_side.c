@@ -42,7 +42,7 @@ static void cb(struct ns_connection *nc, int ev, void *ev_data) {
   (void) ev_data;
   switch (ev) {
     case NS_CONNECT:
-      printf("Reconnect %s\n", * (int *) ev_data == 0 ? "succeeded" : "failed");
+      printf("Reconnect %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
       break;
     case NS_CLOSE:
       printf("Connection %p closed\n", nc);
