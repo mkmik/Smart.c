@@ -11,6 +11,13 @@ analytics and reporting.
 
 Smart.с makes it possible to create private automation cloud in minutes.
 
+# Example: streaming images and controlling remote camera
+
+Please take a look at `examples/mjpg_streamer` directory for the detailed
+description and source code.
+
+# API documentation
+
 # License
 
 Smart.c is released under
