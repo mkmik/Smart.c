@@ -17,7 +17,7 @@ static void push_frame_to_clients(struct ns_mgr *mgr,
                                   const struct websocket_message *wm) {
   struct ns_connection *nc;
   for (nc = ns_next(mgr, NULL); nc != NULL; nc = ns_next(mgr, nc)) {
-    if (nc->flags & NSF_USER_1) continue;  // Ignore websocket connections
+    if (!(nc->flags & NSF_USER_2)) continue;  // Ignore un-marked requests
     ns_printf(nc, "--w00t\r\nContent-Type: image/jpeg\r\n"
               "Content-Length: %lu\r\n\r\n", (unsigned long) wm->size);
     ns_send(nc, wm->data, wm->size);
@@ -33,6 +33,7 @@ static void cb(struct ns_connection *nc, int ev, void *ev_data) {
   switch (ev) {
     case NS_HTTP_REQUEST:
       if (ns_vcmp(&hm->uri, "/stream") == 0) {
+        nc->flags |= NSF_USER_2;   // Set a mark on image requests
         ns_printf(nc, "%s",
                 "HTTP/1.0 200 OK\r\n"
                 "Cache-Control: no-cache\r\n"
