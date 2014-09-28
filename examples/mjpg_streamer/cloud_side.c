@@ -7,6 +7,7 @@
 #include "smart.h"
 
 static int s_received_signal = 0;
+static const char *s_web_root = "./web_root";
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);
@@ -26,6 +27,17 @@ static void push_frame_to_clients(struct ns_mgr *mgr,
   }
 }
 
+static void serve_uri(struct ns_connection *nc, const struct ns_str *uri) {
+  char path[200];
+
+  if (ns_vcmp(uri, "/") == 0) {
+    snprintf(path, sizeof(path), "%s/%s", s_web_root, "index.html");
+  } else {
+    snprintf(path, sizeof(path), "%s%.*s", s_web_root, (int) uri->len, uri->p);
+  }
+  ns_send_http_file(nc, path);
+}
+
 static void cb(struct ns_connection *nc, int ev, void *ev_data) {
   struct websocket_message *wm = (struct websocket_message *) ev_data;
   struct http_message *hm = (struct http_message *) ev_data;
@@ -43,7 +55,7 @@ static void cb(struct ns_connection *nc, int ev, void *ev_data) {
                 "Content-Type: multipart/x-mixed-replace; "
                 "boundary=--w00t\r\n\r\n");
       } else {
-        ns_send_http_file(nc, "cloud.html");
+        serve_uri(nc, &hm->uri);
       }
       break;
     case NS_WEBSOCKET_FRAME:
