@@ -15,7 +15,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-23 15:38:42 UTC $
+// $Date: 2014-09-28 05:04:41 UTC $
 
 
 #ifndef NS_MALLOC
@@ -908,7 +908,6 @@ void ns_mgr_init(struct ns_mgr *s, void *user_data) {
   memset(s, 0, sizeof(*s));
   s->ctl[0] = s->ctl[1] = INVALID_SOCKET;
   s->user_data = user_data;
-  //s->callback = cb;
 
 #ifdef _WIN32
   { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
@@ -1036,8 +1035,8 @@ struct ns_str *get_http_header(struct http_message *hm, const char *name) {
 static int deliver_websocket_data(struct ns_connection *nc) {
   // Having buf unsigned char * is important, as it is used below in arithmetic
   unsigned char *buf = (unsigned char *) nc->recv_iobuf.buf;
-  int i, len, buf_len = nc->recv_iobuf.len, frame_len = 0,
-      mask_len = 0, header_len = 0, data_len = 0, buffered = 0;
+  uint64_t i, data_len = 0, frame_len = 0, buf_len = nc->recv_iobuf.len,
+  len, mask_len = 0, header_len = 0, ok;
 
   if (buf_len >= 2) {
     len = buf[1] & 127;
@@ -1047,21 +1046,21 @@ static int deliver_websocket_data(struct ns_connection *nc) {
       header_len = 2 + mask_len;
     } else if (len == 126 && buf_len >= 4 + mask_len) {
       header_len = 4 + mask_len;
-      data_len = ((((int) buf[2]) << 8) + buf[3]);
+      data_len = ntohs(* (uint16_t *) &buf[2]);
     } else if (buf_len >= 10 + mask_len) {
       header_len = 10 + mask_len;
-      data_len = (int) (((uint64_t) htonl(* (uint32_t *) &buf[2])) << 32) +
-        htonl(* (uint32_t *) &buf[6]);
+      data_len = (((uint64_t) ntohl(* (uint32_t *) &buf[2])) << 32) +
+        ntohl(* (uint32_t *) &buf[6]);
     }
   }
 
   frame_len = header_len + data_len;
-  buffered = frame_len > 0 && frame_len <= buf_len;
+  ok = frame_len > 0 && frame_len <= buf_len;
 
-  if (buffered) {
+  if (ok) {
     struct websocket_message wsm;
 
-    wsm.size = data_len;
+    wsm.size = (size_t) data_len;
     wsm.data = buf + header_len;
     wsm.flags = buf[0];
 
@@ -1079,7 +1078,7 @@ static int deliver_websocket_data(struct ns_connection *nc) {
     iobuf_remove(&nc->recv_iobuf, frame_len);
   }
 
-  return buffered;
+  return ok;
 }
 
 static void ns_send_ws_header(struct ns_connection *nc, int op, size_t len) {
@@ -1092,19 +1091,12 @@ static void ns_send_ws_header(struct ns_connection *nc, int op, size_t len) {
     header_len = 2;
   } else if (len < 65535) {
     header[1] = 126;
-    header[2] = (len >> 8) & 0xff;
-    header[3] = len & 0xff;
+    * (uint16_t *) &header[2] = htons((uint16_t) len);
     header_len = 4;
   } else {
-    header[1] = 126;
-    header[2] = (((uint64_t) len) >> 56) & 0xff;
-    header[3] = (((uint64_t) len) >> 48) & 0xff;
-    header[4] = (((uint64_t) len) >> 40) & 0xff;
-    header[5] = (((uint64_t) len) >> 32) & 0xff;
-    header[6] = (((uint64_t) len) >> 24) & 0xff;
-    header[7] = (((uint64_t) len) >> 16) & 0xff;
-    header[8] = (((uint64_t) len) >> 8) & 0xff;
-    header[9] = len & 0xff;
+    header[1] = 127;
+    * (uint32_t *) &header[2] = htonl((uint32_t) ((uint64_t) len >> 32));
+    * (uint32_t *) &header[6] = htonl((uint32_t) (len & 0xffffffff));
     header_len = 10;
   }
   ns_send(nc, header, header_len);
