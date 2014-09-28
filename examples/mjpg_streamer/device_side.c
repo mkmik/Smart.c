@@ -8,6 +8,10 @@
 
 static int s_received_signal = 0;
 static int s_connected = 0;
+static int s_poll_interval_ms = 100;
+static int s_width = 400;
+static int s_height = 200;
+static const char *s_mjpg_file = "/var/run/shm/cam.jpg";
 
 static void signal_handler(int sig_num) {
   signal(sig_num, signal_handler);
@@ -38,29 +42,51 @@ static void send_mjpg_frame(struct ns_connection *nc, const char *file_path) {
   }
 }
 
-static void cb(struct ns_connection *nc, int ev, void *ev_data) {
+static void ev_handler(struct ns_connection *nc, int ev, void *ev_data) {
   (void) ev_data;
   switch (ev) {
     case NS_CONNECT:
-      printf("Reconnect %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
+      printf("Reconnect: %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
       break;
     case NS_CLOSE:
       printf("Connection %p closed\n", nc);
       s_connected = 0;
       break;
     case NS_POLL:
-      send_mjpg_frame(nc, (char *) nc->mgr->user_data);
+      send_mjpg_frame(nc, s_mjpg_file);
       break;
   }
+}
+
+// This thread regenerates s_mjpg_file every s_poll_interval_ms milliseconds.
+// It is Raspberry PI specific, change this function on other systems.
+static void *generate_mjpg_data_thread_func(void *param) {
+  FILE *fp;
+  char cmd[200], line[500];
+
+  (void) param;
+  snprintf(cmd, sizeof(cmd), "raspistill -w %d -h %d -n -q 80 -tl 1 "
+           "-t 999999999 -v -o %s 2>&1", s_width, s_height, s_mjpg_file);
+
+  for (;;) {
+    if ((fp = popen(cmd, "r")) != NULL) {
+      while (fgets(line, sizeof(line), fp) != NULL) {
+        //printf("==> %s", line);
+      }
+      fclose(fp);
+    }
+    sleep(1);
+  }
+
+  return NULL;
 }
 
 int main(int argc, char *argv[]) {
   struct ns_mgr mgr;
   time_t last_reconnect_time = 0, now = 0;
 
-  if (argc != 4) {
-    fprintf(stderr, "Usage: %s <mjpg_file> <poll_interval_ms> "
-            "<server_address>\n", argv[0]);
+  if (argc != 2) {
+    fprintf(stderr, "Usage: %s <server_address>\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
@@ -68,16 +94,19 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, signal_handler);
   signal(SIGPIPE, SIG_IGN);
 
-  printf("Streaming [%s] to [%s]\n", argv[1], argv[3]);
+  // Start separate thread that generates MJPG data
+  ns_start_thread(generate_mjpg_data_thread_func, NULL);
 
-  ns_mgr_init(&mgr, argv[1]);
+  printf("Streaming [%s] to [%s]\n", s_mjpg_file, argv[1]);
+
+  ns_mgr_init(&mgr, NULL);
 
   while (s_received_signal == 0) {
-    now = ns_mgr_poll(&mgr, atoi(argv[2]));
+    now = ns_mgr_poll(&mgr, s_poll_interval_ms);
     if (s_connected == 0 && now - last_reconnect_time > 0) {
       // Reconnect if disconnected
-      printf("Reconnecting to %s...\n", argv[3]);
-      ns_connect_websocket(&mgr, argv[3], cb, NULL, "/stream", NULL);
+      printf("Reconnecting to %s...\n", argv[1]);
+      ns_connect_websocket(&mgr, argv[1], ev_handler, NULL, "/stream", NULL);
       last_reconnect_time = now;  // Rate-limit reconnections to 1 per second
       s_connected = 1;
     }
