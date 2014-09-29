@@ -27,6 +27,26 @@ static void push_frame_to_clients(struct ns_mgr *mgr,
   }
 }
 
+static void remove_double_dots(char *s) {
+  char *p = s;
+
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.') {
+          s += 2;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  *p = '\0';
+}
+
 static void serve_uri(struct ns_connection *nc, const struct ns_str *uri) {
   char path[200];
 
@@ -34,6 +54,7 @@ static void serve_uri(struct ns_connection *nc, const struct ns_str *uri) {
     snprintf(path, sizeof(path), "%s/%s", s_web_root, "index.html");
   } else {
     snprintf(path, sizeof(path), "%s%.*s", s_web_root, (int) uri->len, uri->p);
+    remove_double_dots(path);
   }
   ns_send_http_file(nc, path);
 }
@@ -44,7 +65,7 @@ static void cb(struct ns_connection *nc, int ev, void *ev_data) {
 
   switch (ev) {
     case NS_HTTP_REQUEST:
-      if (ns_vcmp(&hm->uri, "/stream") == 0) {
+      if (ns_vcmp(&hm->uri, "/mjpg") == 0) {
         nc->flags |= NSF_USER_2;   // Set a mark on image requests
         ns_printf(nc, "%s",
                 "HTTP/1.0 200 OK\r\n"

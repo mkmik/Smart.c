@@ -41,7 +41,7 @@
             -->
             <div class="content-block-title">Camera View</div>
             <div class="content-block">
-              <img src="/stream">
+              <img src="/mjpg">
             </div>
 
             <div class="content-block-title">Camera Control</div>
@@ -51,7 +51,6 @@
     <!-- Switch (Checkbox) -->
     <li>
       <div class="item-content">
-        <div class="item-media"><i class="icon icon-form-toggle"></i></div>
         <div class="item-inner">
           <div class="item-title label">Camera on/off</div>
           <div class="item-input">
@@ -64,23 +63,38 @@
       </div>
     </li>
 
-
-    <!-- Select -->
     <li>
       <div class="item-content">
-        <div class="item-media"><i class="icon icon-form-freq"></i></div>
         <div class="item-inner">
-          <div class="item-title label">Rate</div>
+          <div class="item-title label">Image Width</div>
           <div class="item-input">
             <select>
-              <option>1 frame/sec</option>
-              <option>2 frames/sec</option>
+              <option>800</option>
+              <option>600</option>
+              <option selected>400</option>
+              <option>200</option>
             </select>
           </div>
         </div>
       </div>
     </li>
 
+
+    <li>
+      <div class="item-content">
+        <div class="item-inner">
+          <div class="item-title label">Image Height</div>
+          <div class="item-input">
+            <select>
+              <option>600</option>
+              <option>480</option>
+              <option selected>200</option>
+              <option>100</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </li>
 
             </ul>
             </div>
@@ -96,8 +110,10 @@
       <div class="toolbar">
         <div class="toolbar-inner">
           <!-- Toolbar links -->
+          <!--
           <a href="#" class="link">Link 1</a>
           <a href="#" class="link">Link 2</a>
+          -->
         </div>
       </div>
     </div>
