@@ -10,6 +10,7 @@ extern "C" {
 
 #define NS_MAX_HTTP_HEADERS 40
 #define NS_MAX_HTTP_REQUEST_SIZE 8192
+#define NS_MAX_PATH 1024
 
 struct http_message {
   struct ns_str message;    // Whole message: request line + headers + body
@@ -65,7 +66,8 @@ void ns_printf_websocket(struct ns_connection *, int op, const char *, ...);
 
 // Utility functions
 struct ns_str *get_http_header(struct http_message *, const char *);
-size_t ns_send_http_file(struct ns_connection *, const char *path);
+void ns_serve_uri_from_fs(struct ns_connection *, struct ns_str *uri,
+                          const char *web_root);
 
 #ifdef __cplusplus
 }

@@ -1265,26 +1265,67 @@ struct ns_connection *ns_connect_websocket(struct ns_mgr *mgr, const char *addr,
   return nc;
 }
 
-size_t ns_send_http_file(struct ns_connection *nc, const char *path) {
+void ns_send_http_file(struct ns_connection *nc, const char *path,
+                       ns_stat_t *st) {
   char buf[BUFSIZ];
-  struct stat st;
-  size_t n, sent_bytes = 0;
+  size_t n;
   FILE *fp;
 
-  if (stat(path, &st) == 0 && (fp = fopen(path, "rb")) != NULL) {
+  if ((fp = fopen(path, "rb")) != NULL) {
     ns_printf(nc, "HTTP/1.1 200 OK\r\n"
-              "Content-Length: %lu\r\n\r\n", (unsigned long) st.st_size );
+              "Content-Length: %lu\r\n\r\n", (unsigned long) st->st_size);
     while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
       ns_send(nc, buf, n);
     }
     fclose(fp);
   } else {
-    ns_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+    ns_printf(nc, "%s", "HTTP/1.1 500 Server Error\r\n"
+              "Content-Length: 0\r\n\r\n");
   }
-
-  return sent_bytes;
 }
-// Copyright(c) By Steve Reid <steve@edmweb.com>
+
+static void remove_double_dots(char *s) {
+  char *p = s;
+
+  while (*s != '\0') {
+    *p++ = *s++;
+    if (s[-1] == '/' || s[-1] == '\\') {
+      while (s[0] != '\0') {
+        if (s[0] == '/' || s[0] == '\\') {
+          s++;
+        } else if (s[0] == '.' && s[1] == '.') {
+          s += 2;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  *p = '\0';
+}
+
+void ns_serve_uri_from_fs(struct ns_connection *nc, struct ns_str *uri,
+                          const char *web_root) {
+  char path[NS_MAX_PATH];
+  ns_stat_t st;
+
+  snprintf(path, sizeof(path), "%s/%.*s", web_root, (int) uri->len, uri->p);
+  remove_double_dots(path);
+
+  if (stat(path, &st) != 0) {
+    ns_printf(nc, "%s", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+  } else if (S_ISDIR(st.st_mode)) {
+    strncat(path, "/index.html", sizeof(path) - (strlen(path) + 1));
+    if (stat(path, &st) == 0) {
+      ns_send_http_file(nc, path, &st);
+    } else {
+      ns_printf(nc, "%s", "HTTP/1.1 403 Access Denied\r\n"
+                "Content-Length: 0\r\n\r\n");
+    }
+  } else {
+    ns_send_http_file(nc, path, &st);
+  }
+}// Copyright(c) By Steve Reid <steve@edmweb.com>
 // 100% Public Domain
 
 #include <string.h>

@@ -14,7 +14,7 @@
 // Alternatively, you can license this software under a commercial
 // license, as set out in <http://cesanta.com/>.
 //
-// $Date: 2014-09-23 15:38:42 UTC $
+// $Date: 2014-09-29 12:47:19 UTC $
 
 #ifndef NS_SKELETON_HEADER_INCLUDED
 #define NS_SKELETON_HEADER_INCLUDED
@@ -85,6 +85,7 @@ typedef unsigned short uint16_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64   int64_t;
 typedef SOCKET sock_t;
+typedef struct _stati64 ns_stat_t;
 #ifndef S_ISDIR
 #define S_ISDIR(x) ((x) & _S_IFDIR)
 #endif
@@ -104,6 +105,7 @@ typedef SOCKET sock_t;
 #define INVALID_SOCKET (-1)
 #define to64(x) strtoll(x, NULL, 10)
 typedef int sock_t;
+typedef struct stat ns_stat_t;
 #endif
 
 #ifdef NS_ENABLE_DEBUG
@@ -303,6 +305,7 @@ extern "C" {
 
 #define NS_MAX_HTTP_HEADERS 40
 #define NS_MAX_HTTP_REQUEST_SIZE 8192
+#define NS_MAX_PATH 1024
 
 struct http_message {
   struct ns_str message;    // Whole message: request line + headers + body
@@ -358,7 +361,8 @@ void ns_printf_websocket(struct ns_connection *, int op, const char *, ...);
 
 // Utility functions
 struct ns_str *get_http_header(struct http_message *, const char *);
-size_t ns_send_http_file(struct ns_connection *, const char *path);
+void ns_serve_uri_from_fs(struct ns_connection *, struct ns_str *uri,
+                          const char *web_root);
 
 #ifdef __cplusplus
 }

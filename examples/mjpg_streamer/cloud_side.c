@@ -27,36 +27,14 @@ static void push_frame_to_clients(struct ns_mgr *mgr,
   }
 }
 
-static void remove_double_dots(char *s) {
-  char *p = s;
-
-  while (*s != '\0') {
-    *p++ = *s++;
-    if (s[-1] == '/' || s[-1] == '\\') {
-      while (s[0] != '\0') {
-        if (s[0] == '/' || s[0] == '\\') {
-          s++;
-        } else if (s[0] == '.' && s[1] == '.') {
-          s += 2;
-        } else {
-          break;
-        }
-      }
-    }
+static void send_command_to_the_device(struct ns_mgr *mgr,
+                                       const struct ns_str *cmd) {
+  struct ns_connection *nc;
+  for (nc = ns_next(mgr, NULL); nc != NULL; nc = ns_next(mgr, nc)) {
+    if (!(nc->flags & NSF_USER_1)) continue;  // Ignore non-websocket requests
+    ns_send_websocket(nc, WEBSOCKET_OP_TEXT, cmd->p, cmd->len);
+    printf("Sent API command [%.*s] to %p\n", (int) cmd->len, cmd->p, nc);
   }
-  *p = '\0';
-}
-
-static void serve_uri(struct ns_connection *nc, const struct ns_str *uri) {
-  char path[200];
-
-  if (ns_vcmp(uri, "/") == 0) {
-    snprintf(path, sizeof(path), "%s/%s", s_web_root, "index.html");
-  } else {
-    snprintf(path, sizeof(path), "%s%.*s", s_web_root, (int) uri->len, uri->p);
-    remove_double_dots(path);
-  }
-  ns_send_http_file(nc, path);
 }
 
 static void cb(struct ns_connection *nc, int ev, void *ev_data) {
@@ -75,8 +53,16 @@ static void cb(struct ns_connection *nc, int ev, void *ev_data) {
                 "Connection: close\r\n"
                 "Content-Type: multipart/x-mixed-replace; "
                 "boundary=--w00t\r\n\r\n");
+      } else if (ns_vcmp(&hm->uri, "/api") == 0 && hm->body.len > 0) {
+        // RESTful API call. HTTP message body should be a JSON message.
+        // We should parse it and take appropriate action.
+        // In our case, simply forward that call to the device.
+        printf("API CALL: [%.*s] [%.*s]\n", (int) hm->method.len, hm->method.p,
+               (int) hm->body.len, hm->body.p);
+        send_command_to_the_device(nc->mgr, &hm->body);
+        ns_printf(nc, "HTTP/1.0 200 OK\nContent-Length: 0\n\n");
       } else {
-        serve_uri(nc, &hm->uri);
+        ns_serve_uri_from_fs(nc, &hm->uri, s_web_root);
       }
       break;
     case NS_WEBSOCKET_FRAME:

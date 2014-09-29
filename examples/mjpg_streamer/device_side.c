@@ -43,7 +43,8 @@ static void send_mjpg_frame(struct ns_connection *nc, const char *file_path) {
 }
 
 static void ev_handler(struct ns_connection *nc, int ev, void *ev_data) {
-  (void) ev_data;
+  struct websocket_message *wm = (struct websocket_message *) ev_data;
+
   switch (ev) {
     case NS_CONNECT:
       printf("Reconnect: %s\n", * (int *) ev_data == 0 ? "ok" : "failed");
@@ -54,6 +55,9 @@ static void ev_handler(struct ns_connection *nc, int ev, void *ev_data) {
       break;
     case NS_POLL:
       send_mjpg_frame(nc, s_mjpg_file);
+      break;
+    case NS_WEBSOCKET_FRAME:
+      printf("GOT CONTROL COMMAND: [%.*s]\n", (int) wm->size, wm->data);
       break;
   }
 }
