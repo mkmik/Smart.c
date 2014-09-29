@@ -41,11 +41,14 @@
             -->
             <div class="content-block-title">Camera View</div>
             <div class="content-block">
-              <img src="/mjpg">
+              <img xsrc="/mjpg">
             </div>
 
             <div class="content-block-title">Camera Control</div>
             <div class="list-block">
+
+            <form action="/api" method="GET" enctype="application/json"
+              id="form-control">
             <ul>
 
     <!-- Switch (Checkbox) -->
@@ -55,7 +58,7 @@
           <div class="item-title label">Camera on/off</div>
           <div class="item-input">
             <label class="label-switch">
-              <input type="checkbox">
+              <input type="checkbox" name="onoff">
               <div class="checkbox"></div>
             </label>
           </div>
@@ -68,7 +71,7 @@
         <div class="item-inner">
           <div class="item-title label">Image Width</div>
           <div class="item-input">
-            <select>
+            <select name="width">
               <option>800</option>
               <option>600</option>
               <option selected>400</option>
@@ -85,7 +88,7 @@
         <div class="item-inner">
           <div class="item-title label">Image Height</div>
           <div class="item-input">
-            <select>
+            <select name="height">
               <option>600</option>
               <option>480</option>
               <option selected>200</option>
@@ -97,6 +100,8 @@
     </li>
 
             </ul>
+            </form>
+
             </div>
 
             <!-- Link to another page -->
@@ -125,6 +130,22 @@
       pushState: true,
       swipePanel: 'left',
       // ... other parameters
+    });
+    Dom7(document).on('change', '#form-control', function(ev) {
+      var data = myApp.formToJSON('#form-control');
+      var json = JSON.stringify(data);
+      /*
+      myApp.addNotification({
+        title: 'RESTful request sent',
+        message: json
+      });
+      */
+      Dom7.ajax({
+        url: '/api',
+        method: 'POST',
+        contentType: 'application/json',
+        data: json
+      });
     });
   </script>
 </body>
