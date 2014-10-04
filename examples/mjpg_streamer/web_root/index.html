@@ -133,6 +133,13 @@
     });
     Dom7(document).on('change', '#form-control', function(ev) {
       var data = myApp.formToJSON('#form-control');
+
+      if (data.onoff[0]) {
+        Dom7('img').attr("src", Dom7('img').attr("xsrc"))
+      } else {
+        Dom7('img').removeAttr("src")
+      }
+
       var json = JSON.stringify(data);
       /*
       myApp.addNotification({
